@@ -38,7 +38,7 @@ This is a Django-based AI platform that provides services for visually impaired 
 1. Clone the repository:
 
    ```bash
-   [git clone https://github.com/your-username/e-commerce-chatbot.git](https://github.com/TejGitH/TECH7009.git)
+   [git clone https://github.com/TejGitH/TECH7009.git]
 
 1. Install the required Python packages:
    
