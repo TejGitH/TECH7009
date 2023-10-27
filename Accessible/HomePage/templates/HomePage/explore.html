@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="">
+  <meta name="author" content="webthemez">
+  <title>Drawing Insights</title>
+
+  <!-- Bootstrap core CSS -->
+  <link href="static/HomePage/bootstrap.css" rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link href="static/HomePage/styles.css" rel="stylesheet">
+  <link href="static/HomePage/font-awesome.min.css" rel="stylesheet">
+  <link href="static/HomePage/animate-custom.css" rel="stylesheet"> 
+  <script src="jquery.min.js"></script>
+  <script src="main.js"></script>
+  <script type="text/javascript" src="modernizr.custom.js"></script>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries --> 
+  <!--[if lt IE 9]>
+          <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+          <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+      <![endif]-->
+  <script type="text/javascript" src="bootstrap.min.js"></script> 
+  <script type="text/javascript" src="jquery.easing.1.3.js"></script> 
+  <script type="text/javascript" src="smoothscroll.js"></script> 
+  <script type="text/javascript" src="custom-scripts.js"></script>
+</head>
+
+<body data-target="#navbar-main">
+  <!-- ==== ABOUT ==== -->
+<div id="about" name="about" role="main" aria-label="About Section">
+    <div class="container">
+      <div class="row white">
+        <h2 class="centered" role="heading" aria-level="2">Explore Images</h2>
+        <hr role="separator" aria-hidden="true">
+        <div class="col-md-6"> 
+          <ul>
+          {% for image in all_images %}
+            <div class="col-md-4 ">
+              <div class="grid overlay">
+                <li><img src="{{ image.image.url }}" alt="Image"></li>
+              </div>
+            </div>
+          {% endfor %}
+          </ul>
+        </div>
+        <div class="col-md-6">
+          
+        </div>
+      </div>
+      <!-- row --> 
+    </div>
+  </div>
+  <!-- container --> 
+<div class="col-md-5">
+</div>
+</div>
+<!-- row --> 
+</div>
+</div>
+<!-- container -->
+
+  <div id="footerwrap">
+    <div class="container"></div>
+  </div>
+
+</body>
+</html>

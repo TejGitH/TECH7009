@@ -1,18 +1,22 @@
 from django.shortcuts import render
+from django.http import HttpResponse
+from PIL import Image
+from .models import StoreImage
+import base64
+from io import BytesIO
 import cv2
 import os
 import random
 import shutil
 import numpy as np
+from matplotlib import pyplot as plt
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.keras.layers import Dense
-#from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
 from keras.preprocessing.image import ImageDataGenerator
 import xml.etree.ElementTree as ET
-from matplotlib import pyplot as plt
-from django.core.files.storage import FileSystemStorage
-from tensorflow.keras.utils import Sequence
+from keras import layers
+from keras.utils import Sequence
 
 
 # Create your views here.
@@ -20,105 +24,164 @@ from tensorflow.keras.utils import Sequence
 def home(request):
     return render(request, "HomePage/index.html")
 
-class CustomImageDataGenerator(Sequence):
+def is_image(file):
+    try:
+        with Image.open(file) as img:
+            return img.format is not None
+    except:
+        return False
 
-    # Define your dataset paths and parameters
-    edge_image_folder = 'C:/Users/gteja/Documents/Tejal docs/OBU - SEM3/Code/Dataset/newcanny 5'
-    annotation_folder = 'C:/Users/gteja/Documents/Tejal docs/OBU - SEM3/Code/Dataset/label5'
-    batch_size = 32
-    target_size = (512, 256)
-    num_classes = 15
+def upload_image(request):
+    if request.method == 'POST':
+        uploaded_file = request.FILES['image']
 
-    def __init__(self, edge_image_folder, annotation_folder, batch_size, target_size, num_classes):
-        self.edge_image_folder = edge_image_folder
-        self.annotation_folder = annotation_folder
-        self.batch_size = batch_size
-        self.target_size = target_size
-        self.num_classes = num_classes
+        if uploaded_file:
+            try:
+                if is_image(uploaded_file):
+                    # Get the uploaded file's name
+                    uploaded_file_name = uploaded_file.name
+                    #return HttpResponse({uploaded_file_name})
+                    
+                    # loads and read an image from path to file
+                    img = cv2.imread('C:/Users/gteja/Documents/Tejal docs/OBU - SEM3/Code/Dataset/4/'+uploaded_file_name)
+                    gray_image = cv2.cvtColor(img, cv2.IMREAD_GRAYSCALE)
+                    if img is not None:
+                        # Create an instance of the Image model and set the image field
+                        image_instance = StoreImage(image=uploaded_file)
 
-        # Load edge images and annotations
-        self.edge_detected_images, self.annotations = self.load_data()
+                        # Save the image instance to the database
+                        image_instance.save()
 
-    def load_data(self):
-        edge_detected_images = []
+                        #kernel = [(15, 0)]  # (Kernel size, Sigma)
+                        kernel_size = 15
+                        sigma = 0                    
+                        edges = cv2.GaussianBlur(gray_image, (kernel_size, kernel_size), sigma)
 
-        annotations = []
+                        # Apply Canny edge detection
+                        canny = cv2.Canny(edges, threshold1=50, threshold2=150)  # Adjust thresholds as needed
+                        
+                        _, ori_img_data = cv2.imencode('.jpg', img)
+                        ori_img_base64 = base64.b64encode(ori_img_data).decode()
 
-        for image_filename in os.listdir(self.edge_image_folder):
-            if image_filename.endswith(".png"):
-                image_path = os.path.join(self.edge_image_folder, image_filename)
-                edge_image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-                edge_detected_images.append(edge_image)
+                        _, canny_img_data = cv2.imencode('.png', canny)
+                        canny_img_base64 = base64.b64encode(canny_img_data).decode()
 
-                # Load corresponding annotation (modify this part based on your annotation format)
-                annotation_filename = os.path.splitext(image_filename)[0] + '.xml'
-                annotation_path = os.path.join(self.annotation_folder, annotation_filename)
-                annotation_info = self.parse_annotation(annotation_path)
-                annotations.append(annotation_info)
+                        # Pass the image URL to the template context
+                        context1 = {
+                            'image_url1': 'data:image/jpg;base64,' + ori_img_base64
+                        }
+                        
+                        # Pass the image URL to the template context
+                        context2 = {
+                            'image_url2': 'data:image/png;base64,' + canny_img_base64
+                        }
+                        merged_context = {**context1, **context2}
+                        #merged_context = {context1}
 
-        return edge_detected_images, annotations
+                        #model_result = cnnmodel(request)
 
-    def parse_annotation(self, annotation_path):
-        # Parse the XML file (adjust this part based on your annotation format)
-        tree = ET.parse(annotation_path)
-        root = tree.getroot()
-
-        # Extract information from the XML as needed
-        # For example, if your XML contains object annotations, you can iterate through them
-        for obj in root.findall('object'):
-            class_label = obj.find('name').text  # Extract class label
-            bbox = obj.find('bndbox')  # Extract bounding box coordinates
-            xmin = int(bbox.find('xmin').text)
-            ymin = int(bbox.find('ymin').text)
-            xmax = int(bbox.find('xmax').text)
-            ymax = int(bbox.find('ymax').text)
-
-            # Store the extracted information in a suitable data structure
-            annotation_info = {
-                'class_label': class_label,
-                'bbox': (xmin, ymin, xmax, ymax)
-            }
-
-            return annotation_info
-
-    def __len__(self):
-        return int(np.ceil(len(self.edge_detected_images) / self.batch_size))
-
-    def __getitem__(self, idx):
-        batch_edge_images = self.edge_detected_images[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_annotations = self.annotations[idx * self.batch_size:(idx + 1) * self.batch_size]
-
-        X = np.zeros((len(batch_edge_images), *self.target_size, 1))
-        Y = np.zeros((len(batch_edge_images), self.num_classes))
-
-        for i, (edge_image, annotation) in enumerate(zip(batch_edge_images, batch_annotations)):
-            # Load and preprocess the Canny edge-detected image
-            edge_image = cv2.resize(edge_image, self.target_size)
-            edge_image = edge_image / 255.0  # Normalize pixel values to [0, 1]
-
-            # Load and preprocess annotations (modify this part according to your needs)
-            # For example, you can extract object bounding boxes and class labels from annotations
-
-            # Assign the preprocessed edge image and annotation to the batch
-            X[i] = edge_image[:, :, np.newaxis]  # Add a single channel dimension
-            Y[i] = annotation  # Replace with your annotation processing logic
-
-        return X, Y
+                        # Render the template with the image
+                        return render(request, 'HomePage/upload.html', merged_context)
+                        #return render(request, 'HomePage/upload.html', context1)
+                    else:
+                        return HttpResponse('Failed to process the uploaded image.')
+            except Exception as e:
+                    return HttpResponse(f'Error processing the image: {str(e)}')
+            else:
+                return HttpResponse('The uploaded file is not an image.')
+        else:
+            return HttpResponse('No image file was selected.')
+            
+    return render(request, 'index.html')
 
 
+def explore_view(request):
+    all_images = StoreImage.objects.all()
+    return render(request, 'HomePage/explore.html', {'all_images': all_images})
+
+class cnnmodel(Sequence):
+    def get(self, request):
+
+        # Retrieve edge-detected images from the database
+        all_images = StoreImage.objects.all()
+        # Create a list to store the canny field you want to access from each object
+        edge_images = []
+
+        # Loop through the StoreImage objects and access the specific field
+        for obj in all_images:
+            canny_field = obj.cannyimg  # Replace 'your_field_name' with the actual field name
+            edge_images.append(canny_field)
+        
+        
+        # Load annotations from a local file repository (replace with your logic)
+        annotation_folder = 'C:/Users/gteja/Documents/Tejal docs/OBU - SEM3/Code/Dataset/label5'
+        annotation_files = os.listdir(annotation_folder)
+        annotations = {}
+        for filename in annotation_files:
+            #with open(os.path.join(annotation_folder, filename), 'r') as file:
+            #    annotations[filename] = file.read()
+
+            if filename.endswith('.xml'):
+                xml_path = os.path.join(annotation_folder, filename)
+                tree = ET.parse(xml_path)
+                root = tree.getroot()
+                # Parse all elements in the XML file
+                annotation = {}
+                for elem in root.iter():
+                    annotation[elem.tag] = elem.text
+                annotations[filename] = annotation
 
 
-def explore(request):
-    return render(request, "HomePage/explore.html")
+        # Combine edge images and annotations for CNN training (replace with your training logic)
+        training_data = []
+        for edge_image in edge_images:
+            image_path = edge_image.cannyimg.path
+            image_filename = os.path.basename(image_path)
+            annotation = annotations.get(image_filename, {})
+            training_data.append({'image_path': image_path, 'annotation': annotation})
+            # Define your CNN model
+        
+        num_classes = 15
+        model = keras.Sequential([
+            # Convolutional Block 1
+            layers.Conv2D(64, (3, 3), activation='relu', padding='same', input_shape=(512, 256, 1)),
+            layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+            layers.MaxPooling2D((2, 2)),
+            
+            # Convolutional Block 2
+            layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+            layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+            layers.MaxPooling2D((2, 2)),
+            
+            # Convolutional Block 3
+            layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+            layers.MaxPooling2D((2, 2)),
+            
+            # Flatten and Fully Connected Layers
+            layers.Flatten(),
+            layers.Dense(256, activation='relu'),
+            layers.Dropout(0.5),  # Dropout layer for regularization
+            layers.Dense(num_classes, activation='softmax')  # Replace 'num_classes' with the actual number of classes
+        ])
 
-def upload(request):
-    return render(request, "HomePage/upload.html")
+        # Compile the model
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-def chat(request):
-    return render(request, "HomePage/chat.html")
+        # Summary of the model architecture
+        model.summary() 
 
-def about(request):
-    return render(request, "HomePage/about.html")
+        # Evaluate the model on your custom data generator
+        test_loss, test_accuracy = model.evaluate(custom_data_generator)
+        print(f'Test Loss: {test_loss:.4f}')
+        print(f'Test Accuracy: {test_accuracy:.4f}')
 
-def accessible(request):
-    return render(request, "HomePage/accessible.html")
+        # Perform CNN training with the training_data
+        
+        
+        
+        
+        
+        
+        return render(request, 'your_template.html', {'training_data': training_data})
